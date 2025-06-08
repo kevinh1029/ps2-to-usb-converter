@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "usbd_hid.h": "c",
+        "stm32f0xx_hal.h": "c"
+    }
+}

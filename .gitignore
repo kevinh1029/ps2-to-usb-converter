@@ -1,0 +1,25 @@
+# STM32CubeIDE specific
+*.launch
+*.bin
+*.elf
+*.hex
+*.map
+*.lst
+*.o
+*.d
+*.log
+
+# Build output folders
+Debug/
+Release/
+
+# IDE settings
+.settings/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Misc
+*.swp
+*.bak
+*.tmp
