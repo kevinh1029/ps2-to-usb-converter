@@ -44,6 +44,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim16;
 
 /* USER CODE BEGIN PV */
 
@@ -62,196 +63,334 @@ typedef struct {
 
 keyboardReportDes HIDkeyboard = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-uint8_t ps2_buffer;
-uint8_t ps2_buffer_ready;
+uint8_t ps2_read_buffer;
+uint8_t ps2_read_buffer_done = 0;
 uint8_t parity = 0;
+uint8_t ps2_write = 0;
+uint8_t ps2_write_buffer;
+uint8_t ps2_write_buffer_done = 0;
+
+
+uint8_t packets[10]; 
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-void
-SystemClock_Config(void);
-static void
-MX_GPIO_Init(void);
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+	if (htim->Instance == TIM16) {
+		HAL_TIM_Base_Stop(&htim16);
+		/*
+		 * Set clock pin to read
+		 * Set data pin to write
+		 * Set data pin low
+		 * GPIO interrupt should take over from here - on the next falling edge, send first data bit.
+		 */
+		
+		
+		PS2CLK_GPIO_Port->MODER &= GPIO_MODER_MODER10_Msk;//WRONG -- NEED TO USE INTERRUPT
 
+    uint32_t mode = PS2DATA_GPIO_Port->MODER;
+		mode |= GPIO_MODER_MODER9_0;
+		mode &= ~GPIO_MODER_MODER9_1;
+		PS2DATA_GPIO_Port->MODER = mode;
+
+		PS2DATA_GPIO_Port->OTYPER |= GPIO_OTYPER_OT_9;
+
+		PS2DATA_GPIO_Port->OSPEEDR &= ~GPIO_OSPEEDR_OSPEEDR9_0;
+
+		mode = PS2DATA_GPIO_Port->PUPDR;
+		mode &= ~GPIO_PUPDR_PUPDR9_0;
+		mode &= ~GPIO_PUPDR_PUPDR9_1;
+		PS2DATA_GPIO_Port->PUPDR = mode;
+
+    PS2DATA_GPIO_Port->BSRR &= ~GPIO_BSRR_BR_9;
+
+	}
+}
+
+void PS2_Write_Init(uint8_t data) {
+	/*
+	 * Set clock pin to write
+	 * Set clock pin low
+	 * Start timer
+	 */
+
+	uint32_t mode = PS2CLK_GPIO_Port->MODER;
+	mode |= GPIO_MODER_MODER10_0;
+	mode &= ~GPIO_MODER_MODER10_1;
+	PS2CLK_GPIO_Port->MODER = mode;
+
+  ps2_write = 1;
+  ps2_write_buffer = data;
+
+	PS2CLK_GPIO_Port->OTYPER |= GPIO_OTYPER_OT_10;
+
+	PS2CLK_GPIO_Port->OSPEEDR &= ~GPIO_OSPEEDR_OSPEEDR10_0;
+
+	mode = PS2CLK_GPIO_Port->PUPDR;
+	mode &= ~GPIO_PUPDR_PUPDR10_0;
+	mode &= ~GPIO_PUPDR_PUPDR10_1;
+	PS2CLK_GPIO_Port->PUPDR = mode;
+
+	PS2CLK_GPIO_Port->BSRR |= GPIO_BSRR_BR_10;
+
+  __HAL_TIM_SET_COUNTER(&htim16, 0);
+	HAL_TIM_Base_Start_IT(&htim16);
+}
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
 
-	/* USER CODE BEGIN 1 */
+  /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_USB_DEVICE_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USB_DEVICE_Init();
+  MX_TIM16_Init();
+  /* USER CODE BEGIN 2 */
 
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1) {
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
-		HIDkeyboard.MODIFIER = 0x02; //press shift
-		HIDkeyboard.KEYCODE1 = 0x04; //press A
-		HIDkeyboard.KEYCODE2 = 0x05; //press B
-		USBD_HID_SendReport(&hUsbDeviceFS, &HIDkeyboard, sizeof(HIDkeyboard));
-		HAL_Delay(50);
-		HIDkeyboard.MODIFIER = 0x00;  // shift release
-		HIDkeyboard.KEYCODE1 = 0x00;  // release key
-		HIDkeyboard.KEYCODE2 = 0x00;  // release key
-		USBD_HID_SendReport(&hUsbDeviceFS, &HIDkeyboard, sizeof(HIDkeyboard));
-		HAL_Delay(1000);
+    /* USER CODE BEGIN 3 */
+
+		// HIDkeyboard.MODIFIER = 0x02; //press shift
+		// HIDkeyboard.KEYCODE1 = 0x04; //press A
+		// HIDkeyboard.KEYCODE2 = 0x05; //press B
+		// USBD_HID_SendReport(&hUsbDeviceFS, &HIDkeyboard, sizeof(HIDkeyboard));
+		// HAL_Delay(50);
+		// HIDkeyboard.MODIFIER = 0x00;  // shift release
+		// HIDkeyboard.KEYCODE1 = 0x00;  // release key
+		// HIDkeyboard.KEYCODE2 = 0x00;  // release key
+		// USBD_HID_SendReport(&hUsbDeviceFS, &HIDkeyboard, sizeof(HIDkeyboard));
+		// HAL_Delay(1000);
+		
+		/*
+		Reset in case of 1, 2, 3.
+		1. Check error flag
+		2. Check parity
+		3. Check for 00, FC, FD, FF 
+		4. Check for FE (resend)
+		5. Check for EE (echo)
+		6. Handle AA and FA (self test passed and ACK)
+		*/
+    int count = 0;
+    if (ps2_read_buffer_done) {
+
+      packets[count++] = ps2_read_buffer;
+      if(count == 10) {
+        //PRINT
+        return 0;
+      }
+
+      if (ps2_read_buffer)
+      {
+        uint8_t data = 0xFE;
+        PS2_Write_Init(data);
+        
+      }
+      ps2_read_buffer_done = 0;
+    }
+    if (ps2_write_buffer_done) {
+      ps2_write = 0;
+      ps2_write_buffer_done = 0;
+    }
 
 		//disable interrupts
 		//read
-		int err;
-		if (ps2_buffer_ready) {
-			err = HIDkeyboardInsert(ps2_to_usb(ps2_buffer));
-			if (!err)
-				ps2_buffer_ready = 0;
-			else {
 
-			}
-			//reset ready flag
-			//enable interrupts
-		}
+		// int err;
+		// if (ps2_read_buffer_done) {
+		// 	err = HIDkeyboardInsert(ps2_to_usb(ps2_read_buffer));
+		// 	if (!err)
+		// 		ps2_read_buffer_done = 0;
+		// 	else {
+
+		// 	}
+		// 	//reset ready flag
+		// 	//enable interrupts
+		// }
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
-	RCC_PeriphCLKInitTypeDef PeriphClkInit = { 0 };
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
-	RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-		Error_Handler();
-	}
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
+  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI48;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI48;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK) {
-		Error_Handler();
-	}
-	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
-	PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_HSI48;
 
-	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-		Error_Handler();
-	}
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
- * @brief GPIO Initialization Function
- * @param None
- * @retval None
- */
-static void MX_GPIO_Init(void) {
-	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
-	/* USER CODE BEGIN MX_GPIO_Init_1 */
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
 
-	/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN TIM16_Init 0 */
 
-	/* GPIO Ports Clock Enable */
-	__HAL_RCC_GPIOC_CLK_ENABLE();
-	__HAL_RCC_GPIOF_CLK_ENABLE();
-	__HAL_RCC_GPIOA_CLK_ENABLE();
+  /* USER CODE END TIM16_Init 0 */
 
-	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  /* USER CODE BEGIN TIM16_Init 1 */
 
-	/*Configure GPIO pin : B1_Pin */
-	GPIO_InitStruct.Pin = B1_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 47;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 149;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
 
-	/*Configure GPIO pins : PA2 PA3 */
-	GPIO_InitStruct.Pin = GPIO_PIN_2 | GPIO_PIN_3;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-	GPIO_InitStruct.Alternate = GPIO_AF1_USART2;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  /* USER CODE END TIM16_Init 2 */
 
-	/*Configure GPIO pin : LD2_Pin */
-	GPIO_InitStruct.Pin = LD2_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+}
 
-	/*Configure GPIO pin : PS2DATA_Pin */
-	GPIO_InitStruct.Pin = PS2DATA_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(PS2DATA_GPIO_Port, &GPIO_InitStruct);
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
 
-	/*Configure GPIO pin : PS2CLK_Pin */
-	GPIO_InitStruct.Pin = PS2CLK_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(PS2CLK_GPIO_Port, &GPIO_InitStruct);
+  /* USER CODE END MX_GPIO_Init_1 */
 
-	/* EXTI interrupt init*/
-	HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
-	/* USER CODE BEGIN MX_GPIO_Init_2 */
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
-	/* USER CODE END MX_GPIO_Init_2 */
+  /*Configure GPIO pin : B1_Pin */
+  GPIO_InitStruct.Pin = B1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA2 PA3 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF1_USART2;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LD2_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PS2DATA_Pin */
+  GPIO_InitStruct.Pin = PS2DATA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(PS2DATA_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PS2CLK_Pin */
+  GPIO_InitStruct.Pin = PS2CLK_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(PS2CLK_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 	if (GPIO_Pin == PS2CLK_Pin) {
-		PS2_Read();
+		if (ps2_write) PS2_Write();
+    else PS2_Read();
 	}
 }
 
@@ -264,7 +403,7 @@ int HIDkeyboardInsert(uint8_t scan_code) {
 		}
 		if (i == 5) {
 			for (int j = 0; j < 6; j++) {
-				keys[j] = 0x01;
+				keys[j] = 0x01; 
 			}
 		}
 	}
@@ -274,16 +413,17 @@ int HIDkeyboardInsert(uint8_t scan_code) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 	__disable_irq();
 	while (1) {
 	}
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
