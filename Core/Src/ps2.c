@@ -2,16 +2,17 @@
 #include "main.h"
 
 
-extern uint8_t ps2_read_buffer;
-extern uint8_t ps2_read_buffer_done;
-extern uint8_t parity;
-extern uint8_t ps2_write;
-extern uint8_t ps2_write_buffer;
-extern uint8_t ps2_write_buffer_done;
+extern volatile uint8_t ps2_read_buffer;
+extern volatile uint8_t ps2_read_buffer_done;
+extern volatile uint8_t parity;
+extern volatile uint8_t ps2_write;
+extern volatile uint8_t ps2_write_buffer;
+extern volatile uint8_t ps2_write_buffer_done;
 
 void PS2_Read(void) {
   static uint8_t bit_count = 0;
   static uint8_t data = 0;
+
 
   GPIO_PinState read_bit = HAL_GPIO_ReadPin(PS2DATA_GPIO_Port, PS2DATA_Pin);
 
@@ -45,18 +46,13 @@ void PS2_Read(void) {
 
 void PS2_Write(void) {
   static uint8_t bit_count = 0;
-  static uint8_t temp_parity;
 
   if (bit_count < 8) 
   {
-    HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, (ps2_write_buffer & (1 << (bit_count - 1))) ? 1 : 0);
+    HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, (ps2_write_buffer & (1 << bit_count)) ? 1 : 0);
   }
   else if (bit_count == 9) {
-    temp_parity = ps2_write_buffer;
-    temp_parity ^= (temp_parity >> 4);
-    temp_parity ^= (temp_parity >> 2);
-    temp_parity ^= (temp_parity >> 1);
-    HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, !(temp_parity&1));
+    HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, evenParity(ps2_write_buffer));
   }
   else if (bit_count == 10){
     HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, 1);

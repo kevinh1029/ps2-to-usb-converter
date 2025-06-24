@@ -54,6 +54,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 int HIDkeyboardInsert(uint8_t scan_code);
+uint8_t evenParity(uint8_t n);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
