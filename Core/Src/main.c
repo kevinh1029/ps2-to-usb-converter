@@ -105,7 +105,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		temp &= ~GPIO_MODER_MODER9_1;
 		PS2DATA_GPIO_Port->MODER = temp;
 
-		//Set data pin low
+		//Set data pin low (start bit)
 		PS2DATA_GPIO_Port->BSRR &= ~GPIO_BSRR_BR_9;
 
 		//GPIO interrupt should take over from here - on the next falling edge, send first data bit.
@@ -194,8 +194,9 @@ int main(void) {
      packets[count++] = ps2_read_buffer;
      if (count == 10)
      {
+    	 printf("\r\n ==================== \r\n");
        for(int i = 0; i < 10; i++){
-       	printf("\r\n %hhu, \r\n", packets[i]);
+       	printf("\r\n 0x%x, \r\n", packets[i]);
        }
        return 0;
      }
@@ -216,6 +217,10 @@ int main(void) {
 
 		ps2_write_buffer_done = 0;
    }
+
+//		uint8_t x = 8;
+//		printf("\r\nHello, %u\r\n", x);
+		//baud 38400
  }
 		
 	/* USER CODE END 3 */

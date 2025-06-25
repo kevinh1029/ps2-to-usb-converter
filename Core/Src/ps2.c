@@ -23,10 +23,11 @@ void PS2_Read(void) {
     }
     if (ps2_read_buffer_done !=0) {
       //reset
+      return;
     }
   } else if (bit_count <= 8) {
     if (read_bit == GPIO_PIN_SET) {
-      data |= (1 << bit_count);
+      data |= (1 << (bit_count-1));
     }
   } else if (bit_count == 9) {
     parity = (read_bit == GPIO_PIN_SET ? 1 : 0);
@@ -36,6 +37,7 @@ void PS2_Read(void) {
       ps2_read_buffer_done = 1;//need to look at this more carefully
     } else {
       //reset
+      return;
     }
     bit_count = 0;
     data = 0;
@@ -51,10 +53,10 @@ void PS2_Write(void) {
   {
     HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, (ps2_write_buffer & (1 << bit_count)) ? 1 : 0);
   }
-  else if (bit_count == 9) {
+  else if (bit_count == 8) {
     HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, evenParity(ps2_write_buffer));
   }
-  else if (bit_count == 10){
+  else if (bit_count == 9){
     HAL_GPIO_WritePin(PS2DATA_GPIO_Port, PS2DATA_Pin, 1);
     PS2DATA_GPIO_Port->MODER &= GPIO_MODER_MODER10_Msk;
   }
@@ -65,6 +67,7 @@ void PS2_Write(void) {
     }
     else{
       //reset
+      return;
     }
     bit_count = 0;
 
